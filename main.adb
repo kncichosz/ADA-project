@@ -81,9 +81,15 @@ procedure Simulation is
          delay Random_Time;
          Put_Line(ESC & "[93m" & "P: Produced product " & Product_Name(Producer_Type_Number)
                   & " number "  & Integer'Image(Product_Number) & ESC & "[0m");
-         -- Accept for storage
-         B.Take(Producer_Type_Number, Product_Number);
-         Product_Number := Product_Number + 1;
+
+         select
+            -- Accept for storage
+            B.Take(Producer_Type_Number, Product_Number);
+            Product_Number := Product_Number + 1;
+         or
+              delay 0.1;
+              Put_Line(ESC & "[91m" & "P: Buffer is full. Waiting to retry..." & ESC & "[0m");
+         end select;
       end loop;
    end Producer;
 
@@ -122,9 +128,15 @@ procedure Simulation is
          Assembly_Type := Random_Assembly.Random(GA);
          -- take an assembly for consumption
          B.Deliver(Assembly_Type, Assembly_Number);
-         Put_Line(ESC & "[96m" & "C: " & Consumer_Name(Consumer_Nb) & " takes assembly " &
-                    Assembly_Name(Assembly_Type) & " number " &
+
+         if Assembly_Number = 0 then
+            Put_Line(ESC & "[91m" & "C: " & Consumer_Name(Consumer_Nb) & " received invalid assembly number 0" & ESC & "[0m");
+            delay 0.5;
+
+         else
+         Put_Line(ESC & "[96m" & "C: " & Consumer_Name(Consumer_Nb) & " takes assembly " & Assembly_Name(Assembly_Type) & " number " &
                     Integer'Image(Assembly_Number) & ESC & "[0m");
+         end if;
       end loop;
    end Consumer;
 
@@ -220,10 +232,6 @@ procedure Simulation is
                end if;
             end Deliver;
             Storage_Contents;
-
-         or
-            delay 5.0;
-              Put_Line(ESC & "[91m" & "B: No requests in the last 5 seconds." & ESC & "[0m");
 
          end select;
       end loop;
