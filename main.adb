@@ -44,7 +44,7 @@ procedure Simulation is
    -- Buffer receives products from Producers and delivers Assemblies to Consumers
    task type Buffer is
       -- Accept a product to the storage (provided there is a room for it)
-      entry Take(Product: in Producer_Type; Number: in Integer);
+      entry Take(Product: in Producer_Type; Number: in Integer; Success: out Boolean);
       -- Deliver an assembly (provided there are enough products for it)
       entry Deliver(Assembly: in Assembly_Type; Number: out Integer);
    end Buffer;
@@ -56,7 +56,7 @@ procedure Simulation is
 
    ----TASK DEFINITIONS----
 
-   --Producer--
+    --Producer--
 
    task body Producer is
       subtype Production_Time_Range is Integer range 1 .. 3;
@@ -67,6 +67,7 @@ procedure Simulation is
       Product_Number: Integer;
       Production: Integer;
       Random_Time: Duration;
+      Success: Boolean;
    begin
       accept Start(Product: in Producer_Type; Production_Time: in Integer) do
          --  start random number generator
@@ -76,23 +77,25 @@ procedure Simulation is
          Production := Production_Time;
       end Start;
       Put_Line(ESC & "[93m" & "P: Started producer of " & Product_Name(Producer_Type_Number) & ESC & "[0m");
+
       loop
          Random_Time := Duration(Random_Production.Random(G));
          delay Random_Time;
          Put_Line(ESC & "[93m" & "P: Produced product " & Product_Name(Producer_Type_Number)
                   & " number "  & Integer'Image(Product_Number) & ESC & "[0m");
 
-         select
-            -- Accept for storage
-            B.Take(Producer_Type_Number, Product_Number);
-            Product_Number := Product_Number + 1;
-         or
-              delay 0.1;
-              Put_Line(ESC & "[91m" & "P: Buffer is full. Waiting to retry..." & ESC & "[0m");
-         end select;
-      end loop;
-   end Producer;
+         B.Take(Producer_Type_Number, Product_Number, Success);
+         while not Success loop
+            delay 0.5;
+            Put_Line(ESC & "[93m" & "P: Buffer full, waiting to add product " & Product_Name(Producer_Type_Number)
+                     & " number " & Integer'Image(Product_Number) & ESC & "[0m");
+            B.Take(Producer_Type_Number, Product_Number, Success);
+         end loop;
 
+         Product_Number := Product_Number + 1;
+      end loop;
+
+   end Producer;
 
    --Consumer--
 
@@ -203,13 +206,15 @@ procedure Simulation is
       Setup_Variables;
       loop
          select
-            accept Take(Product: in Producer_Type; Number: in Integer) do
+            accept Take(Product: in Producer_Type; Number: in Integer; Success: out Boolean) do
+               Success := True;
                if Can_Accept(Product) then
                   Put_Line(ESC & "[91m" & "B: Accepted product " & Product_Name(Product) & " number " &
                              Integer'Image(Number)& ESC & "[0m");
                   Storage(Product) := Storage(Product) + 1;
                   In_Storage := In_Storage + 1;
                else
+                  Success := False;
                   Put_Line(ESC & "[91m" & "B: Rejected product " & Product_Name(Product) & " number " &
                              Integer'Image(Number)& ESC & "[0m");
                end if;
@@ -232,7 +237,9 @@ procedure Simulation is
                end if;
             end Deliver;
             Storage_Contents;
-
+         or
+            delay 0.5;
+            Put_Line(ESC & "[91m" & "B: No requests in the last 0.5 seconds." & ESC & "[0m");
          end select;
       end loop;
    end Buffer;
