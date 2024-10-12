@@ -11,7 +11,7 @@ procedure main is
    ----GLOBAL VARIABLES---
 
    Number_Of_Producers: constant Integer := 5;
-   Number_Of_Assemblies: constant Integer := 3;
+   Number_Of_Assemblies: constant Integer := 5;
    Number_Of_Consumers: constant Integer := 2;
    Max_Goodness_Level: constant Integer := 10;
    Max_Opinion_Level: constant Integer := 100;
@@ -21,14 +21,17 @@ procedure main is
    subtype Consumer_Type is Integer range 1 .. Number_Of_Consumers;
    subtype Goodness_Type is Integer range 0 .. Max_Goodness_Level;
    subtype Opinion_Type is Integer range 0 .. Max_Opinion_Level;
+   subtype Breakfast_Range is Integer range 3 .. 5;
+   subtype Lunch_Range is Integer range 1 .. 3;
 
    --each Producer is assigned a Product that it produces
    Product_Name: constant array (Producer_Type) of String(1 .. 8)
    := ("Burger  ", "Frytki  ", "Nuggetsy", "Napoj   ", "Salatka ");
    --Assembly is a collection of products
-   Assembly_Name: constant array (Assembly_Type) of String(1 .. 17)
-     := ("Zestaw Happy Meal", "Zestaw Big Mac   ", "Zestaw Nuggets   ");
+   Assembly_Name: constant array (Assembly_Type) of String(1 .. 18)
+     := ("Zestaw Happy Meal ", "Zestaw Big Mac    ", "Zestaw Nuggets    ", "Zestaw McMuffin   ", "Zestaw McBreakFast");
 
+   Current_Hour : Integer := 0; --obecna godzina
 
    ----TASK DECLARATIONS----
 
@@ -43,6 +46,9 @@ procedure main is
       entry Start(Consumer_Number: in Consumer_Type;
                   Consumption_Time: in Integer);
    end Consumer;
+
+   task Time_Manager is
+   end Time_Manager;
 
    task type Charity_Event is
       entry Start;
@@ -134,12 +140,12 @@ procedure main is
       package Random_Opinion is new
         Ada.Numerics.Discrete_Random(Opinion_Type);
 
-      --each Consumer takes any (random) Assembly from the Buffer
-      package Random_Assembly is new
-        Ada.Numerics.Discrete_Random(Assembly_Type);
+      package Random_Assembly_Breakfast is new Ada.Numerics.Discrete_Random(Breakfast_Range);
+      package Random_Assembly_Lunch is new Ada.Numerics.Discrete_Random(Lunch_Range);
 
       G: Random_Consumption.Generator;
-      GA: Random_Assembly.Generator;
+      GB: Random_Assembly_Breakfast.Generator;
+      GL: Random_Assembly_Lunch.Generator;
       GO: Random_Opinion.Generator;
       Consumer_Nb: Consumer_Type;
       Assembly_Number: Integer;
@@ -152,7 +158,8 @@ procedure main is
       accept Start(Consumer_Number: in Consumer_Type;
                    Consumption_Time: in Integer) do
          Random_Consumption.Reset(G);
-         Random_Assembly.Reset(GA);
+         Random_Assembly_Breakfast.Reset(GB);
+         Random_Assembly_Lunch.Reset(GL);
          Random_Opinion.Reset(GO);
          Consumer_Nb := Consumer_Number;
          Consumption := Consumption_Time;
@@ -161,7 +168,13 @@ procedure main is
       Put_Line(ESC & "[96m" & "Klient: " & Consumer_Name(Consumer_Nb) & " rozpoczyna zamowienie" & ESC & "[0m");
       loop
          delay Duration(Random_Consumption.Random(G)); --  simulate consumption
-         Assembly_Type := Random_Assembly.Random(GA);
+
+         if Current_Hour < 11 then
+            Assembly_Type := Random_Assembly_Breakfast.Random(GB);
+         else
+            Assembly_Type := Random_Assembly_Lunch.Random(GL);
+         end if;
+
          -- take an assembly for consumption
 
          select
@@ -185,6 +198,23 @@ procedure main is
       end loop;
    end Consumer;
 
+   task body Time_Manager is
+   begin
+      loop
+
+         delay 1.0;
+         Current_Hour := (Current_Hour + 1) mod 24;
+         Put_Line("Godzina w symulacji: " & Integer'Image(Current_Hour) & ":00");
+
+         if Current_Hour = 0 then
+            Put_Line("Rozpoczynamy serwowanie menu sniadaniowego!");
+         elsif Current_Hour = 11 then
+            Put_Line("Rozpoczynamy serwowanie menu lunchowego!");
+         end if;
+
+      end loop;
+   end Time_Manager;
+
 
    --Buffer--
 
@@ -196,10 +226,12 @@ procedure main is
       Assembly_Content: array(Assembly_Type, Producer_Type) of Integer
         := ((2, 1, 2, 0, 2),
             (1, 2, 0, 1, 0),
-            (3, 2, 2, 0, 1));
+            (3, 2, 2, 0, 1),
+            (1, 0, 0, 1, 1),
+            (0, 1, 1, 1, 2));
       Max_Assembly_Content: array(Producer_Type) of Integer;
       Assembly_Number: array(Assembly_Type) of Integer
-        := (1, 1, 1);
+        := (1, 1, 1, 1, 1);
       In_Storage: Integer := 0;
       Survey_Score: Integer := 0;
       procedure Setup_Variables is
